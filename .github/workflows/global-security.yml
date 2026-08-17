@@ -34,26 +34,50 @@ jobs:
           head: ${{ github.event.pull_request.head.sha }}
           extra_args: --debug --only-verified
 
+ jobs:
+  secret-scanning:
+    # keep your existing secret-scanning job here
+
   iac-security:
     name: IaC Security Scan (Trivy)
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
-      # Trivy is free and excellent for IaC and container scanning
-      - name: Run Trivy vulnerability scanner in fs mode
-        uses: aquasecurity/trivy-action@master
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+          cache-dependency-path: '**/pom.xml'
+
+      - name: Resolve Maven dependencies
+        shell: bash
+        run: |
+          set -e
+
+          while IFS= read -r -d '' pom; do
+            echo "Resolving dependencies for: $pom"
+            mvn --batch-mode --file "$pom" dependency:resolve
+          done < <(find . -name pom.xml -not -path './.git/*' -print0)
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
           trivy-config: trivy.yaml
           format: 'table'
-          exit-code: '0' # Set to 1 in later phases to block PRs
+          exit-code: '0'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
 
+  linting:
+    # keep your existing linting job here
   linting:
     name: Super-Linter
     runs-on: ubuntu-latest
